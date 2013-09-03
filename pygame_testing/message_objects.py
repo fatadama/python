@@ -1,13 +1,34 @@
 #define message objects
 
+import math
+
 class all_data:
     def __init__(self):
         self.gps = [0,0]#lat, long
         self.ahrs = [0,0,0]#roll,pitch,yaw
         self.aspeed = 0
         self.alt = 0#altitude (m)
-    def update_gps(self,lat,long):
-        self.gps = [lat,long]
+        self.lam = 0#localizer angle
+        self.gam = 0#glideslope angle
+        self.loc = [0,0,0]#postiion vector in runway-centric coords
+        self.RE = 6378100.0#earth radius in metres
+        #constants defining the runway LOCATION and DIRECTION
+        self.cos_eta_r = -.7071
+        self.sin_eta_r = .7071
+        self.LOC_LONG = -964855190
+        self.LOC_LAT = 306382350
+    def update_gps(self,lat,lon):
+        self.gps = [lat,lon]
+        #local GPS coords
+        lat_rel = self.gps[0]-self.LOC_LAT
+        long_rel = self.gps[1] - self.LOC_LONG
+        #runway centric x-y-z coords in m?
+        x = 1e-7*self.RE*(math.radians(lat_rel)*self.cos_eta_r + math.radians(long_rel)*self.sin_eta_r)
+        y = 1e-7*self.RE*(-math.radians(lat_rel)*self.sin_eta_r + math.radians(long_rel)*self.cos_eta_r)
+        self.loc = [x,y,-self.alt]
+        #update gamma, lambda
+        self.gam = math.degrees( math.atan(self.alt/abs(x)) )
+        self.lam = math.degrees( math.atan(-1.0*y/abs(x)) )
     def update_ahrs(self,roll,pitch,yaw):
         self.ahrs = [roll, pitch, yaw]
     def update_aspeed(self,speed):
