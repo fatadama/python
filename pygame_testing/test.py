@@ -17,15 +17,18 @@ class HUD:
         self._running = True
         pygame.init()
         #screen display properties
-        self.size = (640,240)
+        self.size = (960,240)
         #HUD properties
         self.hudsize = (320,240)
         self.FOV_y = 30#degrees
         self.FOV_x = 40#degrees
         #topdown view properties
         self.topsize = (320,240)
-        self.posHist = []#np.zeros([100,2])
-        self._newPos = False
+        self.posHist = []#store the position history
+        self._newPos = False#flag that is True when new GPS data are received
+        #side view properties
+        self.sidesize = (320,240)
+        self.sidePos = []#store the position history
         self.background = (0,0,0)#black background
         self.screen = pygame.display.set_mode(self.size)
         self.screen.fill(self.background)
@@ -81,26 +84,41 @@ class HUD:
         self.render_line(line_right,(0,0,255))
         #draw horizon line
         self.render_line(line_horizon,(0,255,0))
-    #render top-down position
+    #render top-down position and side view position
         #if not (self.posHist[0][0]==self.data.loc[0] && self.posHist[0][1]==self.data.loc):
         #update history
+        self.render_text("X-Y",(self.hudsize[0],0),0)
+        self.render_text("X: %.2f" % self.data.loc[0],(self.hudsize[0],h),0)
+        self.render_text("Y: %.2f" % self.data.loc[1],(self.hudsize[0],2*h),0)
         self.render_line(np.array([[320,0],[320,240]]),(0,0,255),2)
         #draw the runway from (x = 100 to x = -100)
         self.render_line(np.array([[self.hudsize[0],self.topsize[1]*0.5],[self.hudsize[0]+200.0*self.topsize[0]/750.0,self.topsize[1]*0.5]]),(255,255,0),4)
         if self._newPos:
             self._newPos = False
+            #calculate topdown position
             pos = np.array([100,0]) - self.data.loc[0:2]
             pos = pos*np.array([self.topsize[0]/750.0, self.topsize[1]/562.5])
             pos = pos + np.array([self.hudsize[0],self.topsize[1]*0.5])
             self.posHist.insert(0,(pos[0],pos[1]))
+            #calculate sideview position
+            self.sidePos.insert(0,(pos[0]+self.topsize[0],self.sidesize[1]-20-self.data.alt*self.sidesize[1]/562.5))
         #remove earliest value if more than 100 are stored
         if len(self.posHist)>250:
             self.posHist.pop()
+            self.sidePos.pop()
             #transform: X = (100-x)*320/750
             #           Y = (281.25-y)*240/562.5
         #draw trajectory
         if len(self.posHist)>1:
             pygame.draw.lines(self.screen, (255,0,0), False, self.posHist,2)
+    #render side view (glideslope) trajecory
+        self.render_text("X-Z",(self.hudsize[0]+self.topsize[0],0),0)
+        self.render_text("Z: %.2f" % -self.data.loc[2],(self.hudsize[0]+self.topsize[0],h),0)
+        self.render_line(np.array([[640,0],[640,240]]),(0,0,255),2)
+        #render runway
+        self.render_line(np.array([[self.hudsize[0]+self.topsize[0],self.sidesize[1]-20],[self.hudsize[0]+self.topsize[0]+200*self.topsize[0]/750.0,self.sidesize[1]-20]]),(255,255,0),4)
+        if len(self.sidePos)>1:
+            pygame.draw.lines(self.screen, (255,0,0), False, self.sidePos,2)
         #write to display
         pygame.display.flip()
 
