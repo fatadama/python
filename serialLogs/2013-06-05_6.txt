@@ -1,0 +1,25 @@
+Doing INS startup...
+
+Init Gyro**
+
+Accel Offsets X:0.00000000 	 Y:0.00000000 	 Z:0.00
+000000
+
+Accel Scale X:1.00000000 	 Y:1.00000000 	 Z:1.0000
+0000
+
+Gyro Offsets X:-0.02364430 	 Y:-0.02584328 	 Z:-0.
+00747480
+
+
+
+Menu: 
+
+    c) calibrate accelerometers
+
+    d) display offsets and scaling
+
+    l) level (capture offsets from level)
+
+    t) test
+
