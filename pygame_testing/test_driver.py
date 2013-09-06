@@ -15,7 +15,6 @@ if __name__ == "__main__":
     flag_killed = False
     #time_last is the last time we read from sensors.csv
     
-
     #storage variables
     theta = 0
     alt = 100
