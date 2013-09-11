@@ -1,6 +1,32 @@
 import sys, pygame, numpy as np, math
 from multiprocessing import Process, Pipe, Lock
 
+class window:
+    def __init__(self,x=0,y=0,h=0,w=0):
+        self.xy = [x,y]#origin within the game window
+        self.size = [h,w]#size within the game window in px
+        self.xscale = 100#x limits of the window in fictional distance units, used for rendering distances on a scaled window
+        self.AR = (1.0*w)/h
+        self.origin = [0,0]
+    def scale(self,sc):
+        self.xscale = sc
+    def set_origin(self,x,y):
+        #set the origin for the transformed axis WITHIN this frame, the units are the same as xscale
+        self.origin = [x,y]
+    def render_line(self,screen,line,colorSpec=(255,0,0),thickness=2):
+        #pygame.draw.line(self.screen, colorSpec, (line[0,0],line[0,1]),(line[1,0],line[1,1]),thickness)
+        #line has format: ([[x0,y0],[x1,y1]]), and is in the scaled! frame
+        #transform line to pixel values:
+        [x0,y0] = self.convert_pt(line[0,0],line[0,1])
+        [x1,y1] = self.convert_pt(line[1,0],line[1,1])
+        print [x0,y0]
+        pygame.draw.line(screen,colorSpec, (x0,y0),(x1,y1),thickness)
+    def convert_pt(self,x,y):
+        x1 = (x+self.origin[0])*self.size[0]/self.xscale + self.xy[0]
+        y1 = (y+self.origin[1])*self.size[1]/(self.xscale*self.AR) + self.xy[1]
+        return [x1,y1]
+        
+
 #class to hold and manage data
 class all_data:
     def __init__(self):
@@ -12,11 +38,11 @@ class all_data:
         self.gam = 0#glideslope angle
         self.loc = [0,0,0]#postion vector in runway-centric coords
         self.RE = 6378100.0#earth radius in metres
-        #constants defining the runway LOCATION and DIRECTION
-        self.cos_eta_r = -.7071
-        self.sin_eta_r = .7071
-        self.LOC_LONG = -964855190
-        self.LOC_LAT = 306382350
+        #constants defining the runway LOCATION and DIRECTION - these need to be updated EVERY TIME we fly
+        self.cos_eta_r = -1
+        self.sin_eta_r = 0
+        self.LOC_LONG = -964850333
+        self.LOC_LAT = 306378999
     def update_gps(self,lat,lon):
         self.gps = [lat,lon]
         #local GPS coords
@@ -65,6 +91,9 @@ class HUD:
         self.FOV_x = 40#degrees
         #topdown view properties
         self.topsize = (320,240)
+        self.topWindow = window(320,0,320,240)
+        self.topWindow.scale(750)
+        self.topWindow.set_origin(100,281.25)
         self.posHist = []#store the position history
         self._newPos = False#flag that is True when new GPS data are received
         #side view properties
@@ -111,7 +140,7 @@ class HUD:
         string = "GAMMA: %.2f" % self.data.gam
         self.render_text(string,(0,4*h),size=self.hudsize)
         #transform the pitch axis
-        offset = self.hudsize[0]*((self.data.ahrs[1] + math.degrees(math.atan(math.sqrt(self.data.alt)*.0002801)))/self.FOV_y)
+        offset = self.hudsize[0]*((self.data.ahrs[1] + math.degrees(math.atan(math.sqrt(abs(self.data.alt))*.0002801)))/self.FOV_y)
         line_horizon = np.array([[0,0.5*self.hudsize[1]],[self.hudsize[0],0.5*self.hudsize[1]]]) + offset*np.array([[0,1],[0,1]])
         line_left = np.array([[0,0],[self.hudsize[0]*0.5,self.hudsize[1]*0.5]]) + offset*np.array([[0,1],[0,1]])
         line_right = np.array([[self.hudsize[0]*0.5,self.hudsize[1]*0.5],[self.hudsize[0],0]]) + offset*np.array([[0,1],[0,1]])
@@ -133,7 +162,8 @@ class HUD:
         self.render_text("Y: %.2f" % self.data.loc[1],(self.hudsize[0],2*h),0)
         self.render_line(np.array([[320,0],[320,240]]),(0,0,255),2)
         #draw the runway from (x = 100 to x = -100)
-        self.render_line(np.array([[self.hudsize[0],self.topsize[1]*0.5],[self.hudsize[0]+200.0*self.topsize[0]/750.0,self.topsize[1]*0.5]]),(255,255,0),4)
+        self.topWindow.render_line(self.screen,np.array([[-100,0],[100,0]]),(255,255,0),4)
+        #self.render_line(np.array([[self.hudsize[0],self.topsize[1]*0.5],[self.hudsize[0]+200.0*self.topsize[0]/750.0,self.topsize[1]*0.5]]),(255,255,0),4)
         if self._newPos:
             self._newPos = False
             #calculate topdown position

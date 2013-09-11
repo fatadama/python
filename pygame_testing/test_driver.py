@@ -20,7 +20,7 @@ if __name__ == "__main__":
     alt = 100
     flag_incr = True
 
-    fid = open('sensors.csv','r')
+    fid = open('ft_landing.csv','r')
     #skip the first line, which is labels
     line = fid.readline()
     line = ''
@@ -37,7 +37,7 @@ if __name__ == "__main__":
             #loop if the EOF is reached
             if len(line)==0:
                 fid.close()
-                fid = open('sensors.csv','r')
+                fid = open('ft_landing.csv','r')
                 #skip the first line, which is labels
                 line = fid.readline()
                 line = fid.readline()
