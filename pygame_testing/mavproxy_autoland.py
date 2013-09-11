@@ -69,14 +69,16 @@ def unload():
 
 def mavlink_packet(msg):
     #handle an incoming mavlink packet
-    type = msg.get_type()
-
+    mtype = msg.get_type()
+    
     master = mpstate.master()
     state = mpstate.autoland_state
-    if type == 'GLOBAL_POSITION_INT':
-        module_state.gps = [msg.lat,msg.lon]
-        module_state.alt = 0.001*msg.relative_alt#check units of this
-    elif type == 'VFR_HUD':
-        module_state.aspeed = msg.airspeed#check units, should be m/s
-    elif type == 'ATTITUDE':
-        module_state.ahrs = [msg.roll*57.30,msg.pitch*57.30,msg.yaw*57.30]#should be in deg      
+    if mtype == 'GLOBAL_POSITION_INT':
+        #module_state.gps = [msg.lat,msg.lon]
+        mpstate.autoland_state.update_gps(msg.lat,msg.lon)
+        mpstate.autoland_state.update_alt(.001*msg.relative_alt)
+        #module_state.alt = 0.001*msg.relative_alt#check units of this
+    elif mtype == 'VFR_HUD':
+        mpstate.autoland_state.update_aspeed(msg.airspeed)#check units, should be m/s
+    elif mtype == 'ATTITUDE':
+        mpstate.autoland_state.update_ahrs(msg.roll*57.30,msg.pitch*57.30,msg.yaw*57.30)#should be in deg      
