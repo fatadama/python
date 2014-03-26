@@ -1,7 +1,7 @@
 import cv2, cv, numpy as np,time, pickle
 
 def main():
-    fname = "test_2.png"
+    fname = "test_1.png"
     imageProc(fname)
 
 def nothing(args):
@@ -110,7 +110,7 @@ def imageProc(fname):
         else:
             #try drawing the best contour and not showing the thresholded image
             cv2.circle(img,(cx,cy),3,(0,255,0),-1)
-            cv2.drawContours(img,contours,-1,(255,0,0),2)
+            cv2.drawContours(img,contours,-1,(255,255,255),-1)
             cv2.imshow('camera',img)
         keyRet = cv2.waitKey(5)
         #see if user hits 'ESC' in opencv windows

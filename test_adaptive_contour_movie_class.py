@@ -29,23 +29,28 @@ class objectTracker():
             #if the first call, get the upper and lower bounds
             if self.firstCall:
                 self.firstCall = 0
-                xyhsv = hsv[self.tarX,self.tarY]
+                xyhsv = hsv[self.tarY,self.tarX]
                 self.lower = xyhsv
                 self.upper = xyhsv
                 #find adjacent pixels, say 10? to create a threshold
+                #5,0.2 works well
                 for i in range ((self.tarX-5),(self.tarX+5)):
                     for j in range (self.tarY-5,self.tarY+5):
-                        if np.amax( np.diff([hsv[i,j],xyhsv],axis=0 ) ) < 5:
-                            self.lower = np.amin([self.lower,hsv[i,j]],axis=0)
-                            self.upper = np.amax([self.upper,hsv[i,j]],axis=0)
-                self.lower = self.lower-0.3*np.array([255,255,255])
-                self.upper = self.upper+0.3*np.array([255,255,255])
+                        #print np.diff([hsv[i,j],xyhsv],axis=0 ),np.size(np.nonzero(np.diff([hsv[i,j],xyhsv],axis=0 ) < 50),1)
+                        if np.amax( np.diff([hsv[i,j],xyhsv],axis=0 ) ) < 50:
+                            self.lower = np.amin([self.lower,hsv[j,i]],axis=0)
+                            self.upper = np.amax([self.upper,hsv[j,i]],axis=0)
+                self.lower = self.lower-0.05*np.array([255,255,255])
+                self.upper = self.upper+0.05*np.array([255,255,255])
             #threshold the image
             thresh = cv2.inRange(hsv,self.lower,self.upper)
             #get the contours
             contours,hierarchy = cv2.findContours(thresh,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+            #pickle contours to deal with a bug in opencv 2.4.3
+            tmp = pickle.dumps(contours)
+            contours = pickle.loads(tmp)
             #find the centroid closest to the target location:
-            cmin = 0
+            cmin = np.array([])
             cx,cy = (0,0)
             for cnt in contours:
                 M = cv2.moments(cnt)
@@ -58,23 +63,34 @@ class objectTracker():
                     cx,cy = ccx,ccy
                     cmin = cnt
             #lowpass filter the target location using cx, cy
-            self.tarX = cx
-            self.tarY = cy
+            alph = 0.35
+            TC = 0.333333*(1.0-alph)/alph
+            self.tarX = alph*cx + (1-alph)*self.tarX
+            self.tarY = alph*cy + (1-alph)*self.tarY
+            #self.tarX = cx
+            #self.tarY = cy
 
             if not (type(cmin) is int):
                 cv2.drawContours(imgout,cmin,-1,(0,0,0),2)
                 #cv2.drawContours(imgout,contours,-1,(255,255,255),-1)
             # update upper and lower to match the contour
-            cnvxhll = cv2.convexHull(cmin)
-            for i in range(0,np.size(cnvxhll,0)):
-                self.lower = np.amin([self.lower,hsv[cnvxhll[i,0,1],cnvxhll[i,0,0]]],axis=0)
-                self.upper = np.amax([self.upper,hsv[cnvxhll[i,0,1],cnvxhll[i,0,0]]],axis=0)
+            if np.size(cmin,0) > 0:
+                cnvxhll = cv2.convexHull(cmin)
+                # need to lowpas these as well to not change too fast
+                lowertemp = np.copy(self.lower)
+                uppertemp = np.copy(self.upper)
+                for i in range(0,np.size(cnvxhll,0)):
+                    lowertemp= np.amin([self.lower,hsv[cnvxhll[i,0,1],cnvxhll[i,0,0]]],axis=0)
+                    uppertemp = np.amax([self.upper,hsv[cnvxhll[i,0,1],cnvxhll[i,0,0]]],axis=0)
+                self.lower = alph*lowertemp + (1-alph)*self.lower
+                self.upper = alph*uppertemp + (1-alph)*self.upper
+                print self.lower,self.upper
             return imgout
         else:
             return img
 
 def main():
-    fname = "ft_video3.wmv"
+    fname = "ft_video1.wmv"
     imageProc(fname)
 
 def nothing(args):
@@ -86,7 +102,7 @@ def settingUpdate(blurRad):
 
 def selectXY(event,x,y,flags,param):
     global OT
-    if event == cv2.EVENT_LBUTTONDBLCLK:
+    if event == cv2.EVENT_LBUTTONDOWN:
         tarX = x
         tarY = y
         OT.getXY(x,y)
@@ -103,7 +119,7 @@ def imageProc(fname):
     capture = cv2.VideoCapture(fname)
     
     #initialize variables for HSV limits and blur radius:
-    blurRad = 5#image blur radius
+    blurRad = 10#image blur radius
     
     #create trackbars for HSV limits and blur value:
     cv2.createTrackbar('blur','camera',blurRad,15,nothing)
@@ -128,7 +144,7 @@ def imageProc(fname):
                 
                 #img2 = np.zeros(np.shape(img))
                 img2 = OT.improcess(img)
-                cx,cy = OT.tarX,OT.tarY
+                cx,cy = int(OT.tarX),int(OT.tarY)
                 cv2.circle(img2,(cx,cy),3,(255,0,0),-1)
                 
                 cv2.imshow('camera',img2)
