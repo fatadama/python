@@ -1,7 +1,8 @@
 import cv2, cv, numpy as np,time, pickle
 
 def main():
-    fname1 = "Easy Star Autoland.mp4"
+    #fname1 = "Easy Star Autoland.mp4"
+    fname1 = "pass3.mpg"
     imageProc(fname1)
 
 def nothing(args):
@@ -24,6 +25,7 @@ def imageProc(fname):
     print vidWriter
 
     first = True
+    shift = np.array([0,0])
     while True:
         ret,img1 = capture.read()
         if ret:
@@ -38,8 +40,13 @@ def imageProc(fname):
                     
                 #perform stabilization
                 reet = cv2.phaseCorrelate(np.float32(imgNew),np.float32(imgLast))
+                #lowpass filter
+                alpha = 0.33333
+                shift[0] = alpha*reet[0] + (1-alpha)*shift[0]
+                shift[1] = alpha*reet[1] + (1-alpha)*shift[1]
+                #shift = reet
                 #shift the new image
-                M = np.float32([[1,0,reet[0]],[0,1,reet[1]]])
+                M = np.float32([[1,0,shift[0]],[0,1,shift[1]]])
                 cols,rows = np.size(img1,axis=1),np.size(img1,axis=0)
 
                 img3 = cv2.warpAffine(img2,M,(cols,rows))
