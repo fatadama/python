@@ -1,7 +1,8 @@
 import cv2, cv, numpy as np,time, pickle
 
 def main():
-    fname = "ft_video3.wmv"
+    #fname = "ft_video3.wmv"
+    fname = "pass3.mpg"
     videoProc(fname)
 
 def nothing(args):

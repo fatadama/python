@@ -34,8 +34,10 @@ class objectTracker():
                 self.upper = xyhsv
                 #find adjacent pixels, say 10? to create a threshold
                 #5,0.2 works well
-                for i in range ((self.tarX-5),(self.tarX+5)):
-                    for j in range (self.tarY-5,self.tarY+5):
+                irange = range( max(self.tarX-5,0), min(self.tarX+5,480))
+                jrange = range( max(self.tarY-5,0), min(self.tarY+5,640))
+                for i in irange:
+                    for j in jrange:
                         #print np.diff([hsv[i,j],xyhsv],axis=0 ),np.size(np.nonzero(np.diff([hsv[i,j],xyhsv],axis=0 ) < 50),1)
                         if np.amax( np.diff([hsv[i,j],xyhsv],axis=0 ) ) < 50:
                             self.lower = np.amin([self.lower,hsv[j,i]],axis=0)
@@ -90,7 +92,7 @@ class objectTracker():
             return img
 
 def main():
-    fname = "ft_video1.wmv"
+    fname = "pass3.mpg"
     imageProc(fname)
 
 def nothing(args):
