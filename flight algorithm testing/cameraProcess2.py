@@ -27,6 +27,7 @@ def settingUpdate(hsvL,hsvU,blurRad):
     return
 
 def runCameraProc(conn,lock,flag_testing=False):
+    global rollHist
     #flag_testing is passed as True to skip over any connection/lock stuff
     #tell main that the process is running:
     if not flag_testing:
@@ -84,12 +85,24 @@ def runCameraProc(conn,lock,flag_testing=False):
     vidLog = open(fname[0:-3]+'log','w')
     #open Q-matrix log. format name is 'qLog##.log', where ## is the same as in 'fname':
     qLog = open('qLog'+fname[3:-4]+'.log','w')
+    qLog.write('time(sec),c_x(float),c_y(float),phi(float),c_x(px),c_y(px),phi(deg/int),action(int)\n')
+
+    # if we are loading a roll history file for debugging, verify with rollHist.size > 1
+    FLAG_ROLLHIST = False
+    if rollHist.size > 1:
+        FLAG_ROLLHIST = True
     
     #variable that governs if video is being written:
     flag_writing = 0
     
     #open the Q-matrix
     Qtable = bs.load_Q()
+
+    # track the time for using the roll history
+    time1 = 0.0
+    timeLastLookup = -100.0#the time of the last q-lookup
+    lookuprate_Hz = 1
+    inNow = [np.array([])]
     
     if not capture.isOpened:
         print "****Error: camera not found****"
@@ -97,6 +110,11 @@ def runCameraProc(conn,lock,flag_testing=False):
         print capture
         flagShowVis = True
         while True:
+            if FLAG_ROLLHIST:
+                if inNow[0].size > 1:
+                    inLast = np.copy(inNow[0])
+                else:
+                    inLast = np.array([])
             #read the camera image:
             ret,img = capture.read()
             if ret:
@@ -179,6 +197,8 @@ def runCameraProc(conn,lock,flag_testing=False):
                     ##cv2.circle(thresh2,(cx,cy),3,(0,255,0),-1)
                     ##cv2.imshow('camera',thresh2)
             time.sleep(.01)
+
+            time1 += .05
                     
             keyRet = cv2.waitKey(5)
             #see if user hits 'ESC' in opencv windows
@@ -258,6 +278,62 @@ def runCameraProc(conn,lock,flag_testing=False):
                     lock.release()
                     time.sleep(0.5)
                     lock.acquire()
+            else:
+                # if we are testing, still check and see if we are debugging using an established roll history
+                if FLAG_ROLLHIST:
+                    #find the first time index that is less than the current time, time1
+                    inNow=np.nonzero( rollHist[0,:,0] <= time1 )
+                    if inNow[0].size > 1:
+                        if inLast.size > 1:
+                            if (not np.all(inNow[0]==inLast)):
+                                #get the current bank angle
+                                numBanks = numBanks+1
+                                phi = 180.0/3.14159*rollHist[0,inNow[0][-1],1]#convert to degrees
+                                phibar = (phi+phibar*(numBanks-1))/numBanks
+                        else:
+                            numBanks = numBanks+1
+                            phi = rollHist[0,inNow[0][-1],1]
+                            phibar = (phi+phibar*(numBanks-1))/numBanks
+                    if (time1 - timeLastLookup) > 1./lookuprate_Hz:
+                        timeLastLookup = time1
+                        #do the q-lookup - copied all this from the normal process above, inelegant but will work
+                        #use cxbar, cybar, phibar to compute the appropriate bank angle.
+                        #log the "raw" time and state info
+                        qLog.write(str(time1)+','+str(cxbar)+','+str(cybar)+','+str(phibar)+',')
+                        
+                        #round phibar to the nearest 2 degrees:
+                        phibar = int(np.floor(phibar))
+                        phibar = phibar+phibar%2
+                        #round cxbar and cybar to the appropriate ranges: don't know these
+                        #y-axis is spaced every 24 px starting at 7
+                        cybar = int((cybar-7)/24)*24+7
+                        #x-axis every 24 px starting at 0
+                        cxbar = int(cxbar/24)*24
+
+                        #lookup action in Q-matrix
+                        action = bs.qFind(Qtable,[cxbar,cybar,phibar])
+                        #Transmit the target bank angle, which is the bank angle rounded to 2 degrees plus the actions;
+                        #   return -2 (decrease bank angle),0 (do nothing),2 (increase bank angle)
+                        #check that the current state is found in the q-matrix: if not, do not change actions
+                        if action == -10:
+                            print 'Could not match states in Q-matrix'
+                            action = 0
+                        #check that bank angle limits are not exceeded:
+                        if phibar>=30 and action==2:
+                            action = 0
+                        if phibar<=-30 and action==-2:
+                            action = 0
+                        print time1,phibar,action
+                        #log the rounded cxbar, cybar, phibar, and the commanded action:
+                        qLog.write(str(cxbar)+','+str(cybar)+','+str(phibar)+','+str(action)+'\n')
+                        
+                        #reset cxbar, cybar
+                        numFrames = 0
+                        [cxbar,cybar] = [0,0]
+                        #reset phibar, numBanks
+                        numBanks = 0
+                        phibar = 0
+                    
     cv2.destroyAllWindows()
     if not flag_testing:
         conn.send("cam off")        
@@ -272,5 +348,36 @@ def runCameraProc(conn,lock,flag_testing=False):
     #close the q-matrix log
     qLog.close()
 
+rollHist = np.array([])
+
 if __name__ == "__main__":
+    global rollHist
+    #load rollOutput.txt roll history at a specified input
+    time0 = raw_input('Specify the initial time index in rollOutput.txt:')
+    time0 = long(time0)#convert to integer
+    print('Initial time specified as t = ' + str(time0))
+    # load file
+    fin = open('rollOutput.txt','r+')
+    data = np.zeros((1e5,4))
+    datacount = 0
+    while 6 > 5:
+        line = fin.readline()
+        if len(line) < 1:
+            fin.close()
+            break
+        #split with spaces:
+        lineSpl = line.split('\t')
+        data[datacount,0] = float(lineSpl[0])
+        for i in range(2):
+            data[datacount,i+1] = float(lineSpl[i+1])
+        data[datacount,3] = float(lineSpl[i+1][0:-1])
+        datacount+=1
+    #subtract the lowest time index
+    data[0:datacount,0] = data[0:datacount,0] - np.tile([np.min(data[0:datacount,0])],(datacount,1)).transpose()
+    #convert to seconds
+    data[0:datacount,0] = .001*data[0:datacount,0]
+    #get hte array of values to keep. assume no more than 50 seconds of footage
+    keepind = np.nonzero(np.logical_and(data[0:datacount,0] >= time0,data[0:datacount,0] <=time0+50))
+    rollHist = np.copy(data[keepind,0:2])
+    rollHist[0,:,0] = rollHist[0,:,0]-247
     runCameraProc(True,True,True)
